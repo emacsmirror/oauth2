@@ -59,7 +59,8 @@ It returns the code provided by the service."
   "Make an access request to URL using DATA in POST."
   (let ((url-request-method "POST")
         (url-request-data data)
-        (url-request-extra-headers '(("Content-Type" . "application/x-www-form-urlencoded"))))
+        (url-request-extra-headers
+         '(("Content-Type" . "application/x-www-form-urlencoded"))))
     (with-current-buffer (url-retrieve-synchronously url)
       (let ((data (oauth2-request-access-parse)))
         (kill-buffer (current-buffer))
@@ -80,11 +81,13 @@ The CODE should be obtained with `oauth2-request-authorization'.
 Return an `oauth2-token' structure."
   (when code
     (let ((result
-           (oauth2-make-access-request token-url
-                                       (concat "client_id=" client-id
-                                               "&client_secret=" client-secret
-                                               "&code=" code
-                                               "&redirect_uri=urn:ietf:wg:oauth:2.0:oob&grant_type=authorization_code"))))
+           (oauth2-make-access-request
+            token-url
+            (concat
+             "client_id=" client-id
+             "&client_secret=" client-secret
+             "&code=" code
+             "&redirect_uri=urn:ietf:wg:oauth:2.0:oob&grant_type=authorization_code"))))
       (make-oauth2-token :client-id client-id
                          :client-secret client-secret
                          :access-token (aget result 'access_token)
@@ -96,11 +99,12 @@ Return an `oauth2-token' structure."
   "Refresh OAuth access TOKEN.
 TOKEN should be obtained with `oauth2-request-access'."
   (setf (oauth2-token-access-token token)
-        (aget (oauth2-make-access-request (oauth2-token-token-url token)
-                                          (concat "client_id=" (oauth2-token-client-id token)
-                                                  "&client_secret=" (oauth2-token-client-secret token)
-                                                  "&refresh_token=" (oauth2-token-refresh-token token)
-                                                  "&grant_type=refresh_token"))
+        (aget (oauth2-make-access-request
+               (oauth2-token-token-url token)
+               (concat "client_id=" (oauth2-token-client-id token)
+                       "&client_secret=" (oauth2-token-client-secret token)
+                       "&refresh_token=" (oauth2-token-refresh-token token)
+                       "&grant_type=refresh_token"))
               'access_token))
   ;; If the token has a plstore, update it
   (let ((plstore (oauth2-token-plstore token)))
@@ -175,7 +179,8 @@ TOKENS can be obtained with `oauth2-auth'."
   (let (tokens-need-renew)
     (flet ((url-http-handle-authentication (proxy)
                                            (setq tokens-need-renew t)
-                                           ;; This is to make `url' think it's done.
+                                           ;; This is to make `url' think
+                                           ;; it's done.
                                            (setq success t)))
       (let ((url-buffer (url-retrieve-synchronously
                          (oauth2-url-append-access-token token url))))
