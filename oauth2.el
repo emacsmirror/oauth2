@@ -43,10 +43,10 @@ CLIENT-ID is the client id provided by the provider.
 It returns the code provided by the service."
   (browse-url (concat auth-url
                       (if (string-match-p "\?" auth-url) "&" "?")
-                      "client_id=" client-id
+                      "client_id=" (url-hexify-string client-id)
                       "&response_type=code&redirect_uri=urn:ietf:wg:oauth:2.0:oob"
                       (if scope (concat "&scope=" (url-hexify-string scope)) "")
-                      (if state (concat "&state=" state) "")))
+                      (if state (concat "&state=" (url-hexify-string state)) "")))
   (read-string "Enter the code your browser displayed: "))
 
 (defun oauth2-request-access-parse ()
