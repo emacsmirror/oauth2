@@ -36,6 +36,7 @@
 ;;; Code:
 
 (require 'plstore)
+(require 'json)
 
 (defun oauth2-request-authorization (auth-url client-id &optional scope state)
   "Request OAuth authorization at AUTH-URL by launching `browse-url'.
@@ -171,6 +172,10 @@ This allows to store the token in an unique way."
   (concat url
           (if (string-match-p "\?" url) "&" "?")
           "access_token=" (oauth2-token-access-token token)))
+
+;; Local variable from `url'
+;; defined here to avoid compile warning
+(defvar success)
 
 ;;;###autoload
 (defun oauth2-url-retrieve-synchronously (token url)
