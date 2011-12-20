@@ -3,7 +3,7 @@
 ;; Copyright (C) 2011 Free Software Foundation, Inc
 
 ;; Author: Julien Danjou <julien@danjou.info>
-;; Version: 0.1
+;; Version: 0.2
 ;; Keywords: comm
 
 ;; This file is part of GNU Emacs.
