@@ -178,7 +178,7 @@ This allows to store the token in an unique way."
 (defvar success)
 
 ;;;###autoload
-(defun oauth2-url-retrieve-synchronously (token url)
+(defun oauth2-url-retrieve-synchronously (token url &optional request-method request-data request-extra-headers)
   "Retrieve an URL synchronously using TOKENS to access it.
 TOKENS can be obtained with `oauth2-auth'."
   (let (tokens-need-renew)
@@ -187,10 +187,14 @@ TOKENS can be obtained with `oauth2-auth'."
                                            ;; This is to make `url' think
                                            ;; it's done.
                                            (setq success t)))
-      (let ((url-buffer (url-retrieve-synchronously
-                         (oauth2-url-append-access-token token url))))
+      (let ((url-request-method request-method)
+            (url-request-data request-data)
+            (url-request-extra-headers request-extra-headers)
+            (url-buffer))
+        (setq url-buffer (url-retrieve-synchronously
+                          (oauth2-url-append-access-token token url)))
         (if tokens-need-renew
-            (oauth2-url-retrieve-synchronously (oauth2-refresh-access token) url)
+              (oauth2-url-retrieve-synchronously (oauth2-refresh-access token) url request-method request-data request-extra-headers)
           url-buffer)))))
 
 (provide 'oauth2)
