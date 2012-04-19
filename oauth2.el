@@ -3,7 +3,7 @@
 ;; Copyright (C) 2011 Free Software Foundation, Inc
 
 ;; Author: Julien Danjou <julien@danjou.info>
-;; Version: 0.2
+;; Version: 0.3
 ;; Keywords: comm
 
 ;; This file is part of GNU Emacs.
@@ -192,7 +192,8 @@ TOKENS can be obtained with `oauth2-auth'."
             (url-request-extra-headers request-extra-headers)
             (url-buffer))
         (setq url-buffer (url-retrieve-synchronously
-                          (oauth2-url-append-access-token token url)))
+                          (url-generic-parse-url
+                           (oauth2-url-append-access-token token url))))
         (if tokens-need-renew
               (oauth2-url-retrieve-synchronously (oauth2-refresh-access token) url request-method request-data request-extra-headers)
           url-buffer)))))
