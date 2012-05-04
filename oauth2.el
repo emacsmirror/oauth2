@@ -3,7 +3,7 @@
 ;; Copyright (C) 2011 Free Software Foundation, Inc
 
 ;; Author: Julien Danjou <julien@danjou.info>
-;; Version: 0.3
+;; Version: 0.4
 ;; Keywords: comm
 
 ;; This file is part of GNU Emacs.
@@ -91,8 +91,8 @@ Return an `oauth2-token' structure."
              "&redirect_uri=urn:ietf:wg:oauth:2.0:oob&grant_type=authorization_code"))))
       (make-oauth2-token :client-id client-id
                          :client-secret client-secret
-                         :access-token (aget result 'access_token)
-                         :refresh-token (aget result 'refresh_token)
+                         :access-token (cdr (assoc 'access_token result))
+                         :refresh-token (cdr (assoc 'refresh_token result))
                          :token-url token-url))))
 
 ;;;###autoload
@@ -100,13 +100,13 @@ Return an `oauth2-token' structure."
   "Refresh OAuth access TOKEN.
 TOKEN should be obtained with `oauth2-request-access'."
   (setf (oauth2-token-access-token token)
-        (aget (oauth2-make-access-request
-               (oauth2-token-token-url token)
-               (concat "client_id=" (oauth2-token-client-id token)
-                       "&client_secret=" (oauth2-token-client-secret token)
-                       "&refresh_token=" (oauth2-token-refresh-token token)
-                       "&grant_type=refresh_token"))
-              'access_token))
+        (cdr (assoc 'access_token
+                    (oauth2-make-access-request
+                     (oauth2-token-token-url token)
+                     (concat "client_id=" (oauth2-token-client-id token)
+                             "&client_secret=" (oauth2-token-client-secret token)
+                             "&refresh_token=" (oauth2-token-refresh-token token)
+                             "&grant_type=refresh_token")))))
   ;; If the token has a plstore, update it
   (let ((plstore (oauth2-token-plstore token)))
     (when plstore
@@ -195,7 +195,7 @@ TOKENS can be obtained with `oauth2-auth'."
                           (url-generic-parse-url
                            (oauth2-url-append-access-token token url))))
         (if tokens-need-renew
-              (oauth2-url-retrieve-synchronously (oauth2-refresh-access token) url request-method request-data request-extra-headers)
+            (oauth2-url-retrieve-synchronously (oauth2-refresh-access token) url request-method request-data request-extra-headers)
           url-buffer)))))
 
 (provide 'oauth2)
