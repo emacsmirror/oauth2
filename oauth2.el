@@ -3,7 +3,7 @@
 ;; Copyright (C) 2011-2012 Free Software Foundation, Inc
 
 ;; Author: Julien Danjou <julien@danjou.info>
-;; Version: 0.5
+;; Version: 0.6
 ;; Keywords: comm
 
 ;; This file is part of GNU Emacs.
@@ -38,14 +38,15 @@
 (require 'plstore)
 (require 'json)
 
-(defun oauth2-request-authorization (auth-url client-id &optional scope state)
+(defun oauth2-request-authorization (auth-url client-id &optional scope state redirect-uri)
   "Request OAuth authorization at AUTH-URL by launching `browse-url'.
 CLIENT-ID is the client id provided by the provider.
 It returns the code provided by the service."
   (browse-url (concat auth-url
                       (if (string-match-p "\?" auth-url) "&" "?")
                       "client_id=" (url-hexify-string client-id)
-                      "&response_type=code&redirect_uri=urn:ietf:wg:oauth:2.0:oob"
+                      "&response_type=code"
+                      "&redirect_uri=" (url-hexify-string (or redirect-uri "urn:ietf:wg:oauth:2.0:oob"))
                       (if scope (concat "&scope=" (url-hexify-string scope)) "")
                       (if state (concat "&state=" (url-hexify-string state)) "")))
   (read-string "Enter the code your browser displayed: "))
@@ -76,7 +77,7 @@ It returns the code provided by the service."
   refresh-token
   token-url)
 
-(defun oauth2-request-access (token-url client-id client-secret code)
+(defun oauth2-request-access (token-url client-id client-secret code &optional redirect-uri)
   "Request OAuth access at TOKEN-URL.
 The CODE should be obtained with `oauth2-request-authorization'.
 Return an `oauth2-token' structure."
@@ -88,7 +89,8 @@ Return an `oauth2-token' structure."
              "client_id=" client-id
              "&client_secret=" client-secret
              "&code=" code
-             "&redirect_uri=urn:ietf:wg:oauth:2.0:oob&grant_type=authorization_code"))))
+             "&redirect_uri=" (url-hexify-string (or redirect-uri "urn:ietf:wg:oauth:2.0:oob"))
+             "&grant_type=authorization_code"))))
       (make-oauth2-token :client-id client-id
                          :client-secret client-secret
                          :access-token (cdr (assoc 'access_token result))
@@ -119,14 +121,15 @@ TOKEN should be obtained with `oauth2-request-access'."
   token)
 
 ;;;###autoload
-(defun oauth2-auth (auth-url token-url client-id client-secret &optional scope state)
+(defun oauth2-auth (auth-url token-url client-id client-secret &optional scope state redirect-uri)
   "Authenticate application via OAuth2."
   (oauth2-request-access
    token-url
    client-id
    client-secret
    (oauth2-request-authorization
-    auth-url client-id scope state)))
+    auth-url client-id scope state redirect-uri)
+   redirect-uri))
 
 (defcustom oauth2-token-file (concat user-emacs-directory "oauth2.plstore")
   "File path where store OAuth tokens."
@@ -139,7 +142,7 @@ This allows to store the token in an unique way."
   (secure-hash 'md5 (concat auth-url token-url resource-url)))
 
 ;;;###autoload
-(defun oauth2-auth-and-store (auth-url token-url resource-url client-id client-secret)
+(defun oauth2-auth-and-store (auth-url token-url resource-url client-id client-secret &optional redirect-uri)
   "Request access to a resource and store it using `plstore'."
   ;; We store a MD5 sum of all URL
   (let* ((plstore (plstore-open oauth2-token-file))
@@ -156,7 +159,7 @@ This allows to store the token in an unique way."
                            :refresh-token (plist-get plist :refresh-token)
                            :token-url token-url)
       (let ((token (oauth2-auth auth-url token-url
-                                client-id client-secret resource-url)))
+                                client-id client-secret resource-url nil redirect-uri)))
         ;; Set the plstore
         (setf (oauth2-token-plstore token) plstore)
         (setf (oauth2-token-plstore-id token) id)
