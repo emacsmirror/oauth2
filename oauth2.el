@@ -3,7 +3,7 @@
 ;; Copyright (C) 2011-2012 Free Software Foundation, Inc
 
 ;; Author: Julien Danjou <julien@danjou.info>
-;; Version: 0.6
+;; Version: 0.7
 ;; Keywords: comm
 
 ;; This file is part of GNU Emacs.
@@ -75,7 +75,8 @@ It returns the code provided by the service."
   client-secret
   access-token
   refresh-token
-  token-url)
+  token-url
+  access-response)
 
 (defun oauth2-request-access (token-url client-id client-secret code &optional redirect-uri)
   "Request OAuth access at TOKEN-URL.
@@ -95,7 +96,8 @@ Return an `oauth2-token' structure."
                          :client-secret client-secret
                          :access-token (cdr (assoc 'access_token result))
                          :refresh-token (cdr (assoc 'refresh_token result))
-                         :token-url token-url))))
+                         :token-url token-url
+                         :access-response result))))
 
 ;;;###autoload
 (defun oauth2-refresh-access (token)
@@ -116,7 +118,10 @@ TOKEN should be obtained with `oauth2-request-access'."
                    nil `(:access-token
                          ,(oauth2-token-access-token token)
                          :refresh-token
-                         ,(oauth2-token-refresh-token token)))
+                         ,(oauth2-token-refresh-token token)
+                         :access-response
+                         ,(oauth2-token-access-response token)
+                         ))
       (plstore-save plstore)))
   token)
 
@@ -157,7 +162,8 @@ This allows to store the token in an unique way."
                            :client-secret client-secret
                            :access-token (plist-get plist :access-token)
                            :refresh-token (plist-get plist :refresh-token)
-                           :token-url token-url)
+                           :token-url token-url
+                           :access-response (plist-get plist :access-response))
       (let ((token (oauth2-auth auth-url token-url
                                 client-id client-secret resource-url nil redirect-uri)))
         ;; Set the plstore
@@ -166,7 +172,9 @@ This allows to store the token in an unique way."
         (plstore-put plstore id nil `(:access-token
                                       ,(oauth2-token-access-token token)
                                       :refresh-token
-                                      ,(oauth2-token-refresh-token token)))
+                                      ,(oauth2-token-refresh-token token)
+                                      :access-response
+                                      ,(oauth2-token-access-response token)))
         (plstore-save plstore)
         token))))
 
