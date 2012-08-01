@@ -3,7 +3,7 @@
 ;; Copyright (C) 2011-2012 Free Software Foundation, Inc
 
 ;; Author: Julien Danjou <julien@danjou.info>
-;; Version: 0.7
+;; Version: 0.8
 ;; Keywords: comm
 
 ;; This file is part of GNU Emacs.
@@ -35,6 +35,7 @@
 
 ;;; Code:
 
+(require 'cl)
 (require 'plstore)
 (require 'json)
 
