@@ -3,7 +3,7 @@
 ;; Copyright (C) 2011-2012 Free Software Foundation, Inc
 
 ;; Author: Julien Danjou <julien@danjou.info>
-;; Version: 0.8
+;; Version: 0.9
 ;; Keywords: comm
 
 ;; This file is part of GNU Emacs.
@@ -38,6 +38,7 @@
 (require 'cl)
 (require 'plstore)
 (require 'json)
+(require 'url-http)
 
 (defun oauth2-request-authorization (auth-url client-id &optional scope state redirect-uri)
   "Request OAuth authorization at AUTH-URL by launching `browse-url'.
