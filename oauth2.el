@@ -1,6 +1,6 @@
 ;;; oauth2.el --- OAuth 2.0 Authorization Protocol
 
-;; Copyright (C) 2011-2012 Free Software Foundation, Inc
+;; Copyright (C) 2011-2013 Free Software Foundation, Inc
 
 ;; Author: Julien Danjou <julien@danjou.info>
 ;; Version: 0.9
@@ -35,7 +35,7 @@
 
 ;;; Code:
 
-(require 'cl)
+(eval-when-compile (require 'cl))
 (require 'plstore)
 (require 'json)
 (require 'url-http)
@@ -186,29 +186,33 @@ This allows to store the token in an unique way."
           (if (string-match-p "\?" url) "&" "?")
           "access_token=" (oauth2-token-access-token token)))
 
-;; Local variable from `url'
-;; defined here to avoid compile warning
-(defvar success)
+(defvar oauth--url-advice nil)
+(defvar oauth--tokens-need-renew)
+
+;; FIXME: We should change URL so that this can be done without an advice.
+(defadvice url-http-handle-authentication (around oauth-hack activate)
+  (if (not oauth--url-advice)
+      ad-do-it
+    (setq oauth--tokens-need-renew t)
+    ;; This is to make `url' think it's done.
+    (if (boundp 'success) (setq success t)) ;For URL library in Emacs<24.4.
+    (setq ad-return-value t)))              ;For URL library in Emacs≥24.4.
 
 ;;;###autoload
 (defun oauth2-url-retrieve-synchronously (token url &optional request-method request-data request-extra-headers)
   "Retrieve an URL synchronously using TOKENS to access it.
 TOKENS can be obtained with `oauth2-auth'."
-  (let (tokens-need-renew)
-    (flet ((url-http-handle-authentication (proxy)
-                                           (setq tokens-need-renew t)
-                                           ;; This is to make `url' think
-                                           ;; it's done.
-                                           (setq success t)))
-      (let ((url-request-method request-method)
-            (url-request-data request-data)
-            (url-request-extra-headers request-extra-headers)
-            (url-buffer))
-        (setq url-buffer (url-retrieve-synchronously
-                           (oauth2-url-append-access-token token url)))
-        (if tokens-need-renew
-            (oauth2-url-retrieve-synchronously (oauth2-refresh-access token) url request-method request-data request-extra-headers)
-          url-buffer)))))
+  (let* ((oauth--tokens-need-renew nil)
+         (url-buffer
+          (let ((oauth--url-advice t) ;Activate our advice.
+                (url-request-method request-method)
+                (url-request-data request-data)
+                (url-request-extra-headers request-extra-headers))
+            (url-retrieve-synchronously
+             (oauth2-url-append-access-token token url)))))
+    (if oauth--tokens-need-renew
+        (oauth2-url-retrieve-synchronously (oauth2-refresh-access token) url request-method request-data request-extra-headers)
+      url-buffer)))
 
 (provide 'oauth2)
 
