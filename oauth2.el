@@ -3,7 +3,7 @@
 ;; Copyright (C) 2011-2013 Free Software Foundation, Inc
 
 ;; Author: Julien Danjou <julien@danjou.info>
-;; Version: 0.9
+;; Version: 0.10
 ;; Keywords: comm
 
 ;; This file is part of GNU Emacs.
@@ -26,9 +26,9 @@
 ;; Implementation of the OAuth 2.0 draft.
 ;;
 ;; The main entry point is `oauth2-auth-and-store' which will return a token
-;; structure. This token structure can be then used with
-;; `oauth2-url-retrieve-synchronously' to retrieve any data that need OAuth
-;; authentication to be accessed.
+;; structure.  This token structure can be then used with
+;; `oauth2-url-retrieve-synchronously' or `oauth2-url-retrieve' to retrieve
+;; any data that need OAuth authentication to be accessed.
 ;;
 ;; If the token needs to be refreshed, the code handles it automatically and
 ;; store the new value of the access token.
@@ -187,32 +187,52 @@ This allows to store the token in an unique way."
           "access_token=" (oauth2-token-access-token token)))
 
 (defvar oauth--url-advice nil)
-(defvar oauth--tokens-need-renew)
+(defvar oauth--token-data)
 
 ;; FIXME: We should change URL so that this can be done without an advice.
 (defadvice url-http-handle-authentication (around oauth-hack activate)
   (if (not oauth--url-advice)
       ad-do-it
-    (setq oauth--tokens-need-renew t)
+    (let ((url-request-method url-http-method)
+          (url-request-data url-http-data)
+          (url-request-extra-headers url-http-extra-headers)))
+    (url-retrieve-internal (oauth2-url-append-access-token
+                            (oauth2-refresh-access (car oauth--token-data))
+                            (cdr oauth--token-data))
+                           url-callback-function
+                           url-callback-arguments)
     ;; This is to make `url' think it's done.
-    (if (boundp 'success) (setq success t)) ;For URL library in Emacs<24.4.
-    (setq ad-return-value t)))              ;For URL library in Emacs≥24.4.
+    (when (boundp 'success) (setq success t)) ;For URL library in Emacs<24.4.
+    (setq ad-return-value t)))                ;For URL library in Emacs≥24.4.
 
 ;;;###autoload
 (defun oauth2-url-retrieve-synchronously (token url &optional request-method request-data request-extra-headers)
-  "Retrieve an URL synchronously using TOKENS to access it.
-TOKENS can be obtained with `oauth2-auth'."
-  (let* ((oauth--tokens-need-renew nil)
-         (url-buffer
-          (let ((oauth--url-advice t) ;Activate our advice.
-                (url-request-method request-method)
-                (url-request-data request-data)
-                (url-request-extra-headers request-extra-headers))
-            (url-retrieve-synchronously
-             (oauth2-url-append-access-token token url)))))
-    (if oauth--tokens-need-renew
-        (oauth2-url-retrieve-synchronously (oauth2-refresh-access token) url request-method request-data request-extra-headers)
-      url-buffer)))
+  "Retrieve an URL synchronously using TOKEN to access it.
+TOKEN can be obtained with `oauth2-auth'."
+  (let* ((oauth--token-data (cons token url)))
+    (let ((oauth--url-advice t)         ;Activate our advice.
+          (url-request-method request-method)
+          (url-request-data request-data)
+          (url-request-extra-headers request-extra-headers))
+      (url-retrieve-synchronously
+       (oauth2-url-append-access-token token url)))))
+
+;;;###autoload
+(defun oauth2-url-retrieve (token url callback &optional
+                                  cbargs
+                                  request-method request-data request-extra-headers)
+  "Retrieve an URL asynchronously using TOKEN to access it.
+TOKEN can be obtained with `oauth2-auth'.  CALLBACK gets called with CBARGS
+when finished.  See `url-retrieve'."
+  ;; TODO add support for SILENT and INHIBIT-COOKIES.  How to handle this in `url-http-handle-authentication'.
+  (let* ((oauth--token-data (cons token url)))
+    (let ((oauth--url-advice t)         ;Activate our advice.
+          (url-request-method request-method)
+          (url-request-data request-data)
+          (url-request-extra-headers request-extra-headers))
+      (url-retrieve
+       (oauth2-url-append-access-token token url)
+       callback cbargs))))
 
 (provide 'oauth2)
 
