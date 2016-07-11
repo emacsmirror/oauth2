@@ -190,11 +190,11 @@ This allows to store the token in an unique way."
 (defvar oauth--token-data)
 
 (defun oauth2-authz-bearer-header (token)
-  "Return 'Authoriztions: Bearer' header with TOKEN."
+  "Return `Authoriztions: Bearer' header with TOKEN."
   (cons "Authorization" (format "Bearer %s" token)))
 
 (defun oauth2-extra-headers (extra-headers)
-  "Return EXTRA-HEADERS with 'Authorization: Bearer' added."
+  "Return EXTRA-HEADERS with `Authorization: Bearer' added."
   (cons (oauth2-authz-bearer-header (oauth2-token-access-token (car oauth--token-data)))
         extra-headers))
 
