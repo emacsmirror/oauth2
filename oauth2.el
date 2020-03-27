@@ -1,9 +1,9 @@
 ;;; oauth2.el --- OAuth 2.0 Authorization Protocol
 
-;; Copyright (C) 2011-2016 Free Software Foundation, Inc
+;; Copyright (C) 2011-2020 Free Software Foundation, Inc
 
 ;; Author: Julien Danjou <julien@danjou.info>
-;; Version: 0.11
+;; Version: 0.12
 ;; Keywords: comm
 
 ;; This file is part of GNU Emacs.
@@ -149,7 +149,7 @@ This allows to store the token in an unique way."
   (secure-hash 'md5 (concat auth-url token-url resource-url)))
 
 ;;;###autoload
-(defun oauth2-auth-and-store (auth-url token-url resource-url client-id client-secret &optional redirect-uri)
+(defun oauth2-auth-and-store (auth-url token-url scope client-id client-secret &optional redirect-uri state)
   "Request access to a resource and store it using `plstore'."
   ;; We store a MD5 sum of all URL
   (let* ((plstore (plstore-open oauth2-token-file))
@@ -167,7 +167,7 @@ This allows to store the token in an unique way."
                            :token-url token-url
                            :access-response (plist-get plist :access-response))
       (let ((token (oauth2-auth auth-url token-url
-                                client-id client-secret resource-url nil redirect-uri)))
+                                client-id client-secret scope state redirect-uri)))
         ;; Set the plstore
         (setf (oauth2-token-plstore token) plstore)
         (setf (oauth2-token-plstore-id token) id)
