@@ -3,7 +3,7 @@
 ;; Copyright (C) 2011-2020 Free Software Foundation, Inc
 
 ;; Author: Julien Danjou <julien@danjou.info>
-;; Version: 0.13
+;; Version: 0.14
 ;; Keywords: comm
 
 ;; This file is part of GNU Emacs.
@@ -90,7 +90,8 @@ Return an `oauth2-token' structure."
             token-url
             (concat
              "client_id=" client-id
-             "&client_secret=" client-secret
+	     (when client-secret
+               (concat  "&client_secret=" client-secret))
              "&code=" code
              "&redirect_uri=" (url-hexify-string (or redirect-uri "urn:ietf:wg:oauth:2.0:oob"))
              "&grant_type=authorization_code"))))
@@ -110,7 +111,8 @@ TOKEN should be obtained with `oauth2-request-access'."
                     (oauth2-make-access-request
                      (oauth2-token-token-url token)
                      (concat "client_id=" (oauth2-token-client-id token)
-                             "&client_secret=" (oauth2-token-client-secret token)
+			     (when (oauth2-token-client-secret token)
+                               (concat "&client_secret=" (oauth2-token-client-secret token)))
                              "&refresh_token=" (oauth2-token-refresh-token token)
                              "&grant_type=refresh_token")))))
   ;; If the token has a plstore, update it
