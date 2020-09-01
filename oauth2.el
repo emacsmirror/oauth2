@@ -1,10 +1,11 @@
-;;; oauth2.el --- OAuth 2.0 Authorization Protocol
+;;; oauth2.el --- OAuth 2.0 Authorization Protocol  -*- lexical-binding:t -*-
 
 ;; Copyright (C) 2011-2020 Free Software Foundation, Inc
 
 ;; Author: Julien Danjou <julien@danjou.info>
 ;; Version: 0.14
 ;; Keywords: comm
+;; Package-Requires: ((cl-lib "0.5") (nadvice "0.3"))
 
 ;; This file is part of GNU Emacs.
 
@@ -35,10 +36,16 @@
 
 ;;; Code:
 
-(eval-when-compile (require 'cl))
+(eval-when-compile (require 'cl-lib))
 (require 'plstore)
 (require 'json)
 (require 'url-http)
+
+(defvar url-http-data)
+(defvar url-http-method)
+(defvar url-http-extra-headers)
+(defvar url-callback-arguments)
+(defvar url-callback-function)
 
 (defun oauth2-request-authorization (auth-url client-id &optional scope state redirect-uri)
   "Request OAuth authorization at AUTH-URL by launching `browse-url'.
@@ -70,7 +77,7 @@ It returns the code provided by the service."
         (kill-buffer (current-buffer))
         data))))
 
-(defstruct oauth2-token
+(cl-defstruct oauth2-token
   plstore
   plstore-id
   client-id
@@ -142,7 +149,8 @@ TOKEN should be obtained with `oauth2-request-access'."
 
 (defcustom oauth2-token-file (concat user-emacs-directory "oauth2.plstore")
   "File path where store OAuth tokens."
-  :group 'oauth2
+  ;; FIXME: This var doesn't belong to any group.  Either add it to some
+  ;; pre-existing group or create an `oauth2' group for it.
   :type 'file)
 
 (defun oauth2-compute-id (auth-url token-url scope)
@@ -202,20 +210,22 @@ This allows to store the token in an unique way."
 
 
 ;; FIXME: We should change URL so that this can be done without an advice.
-(defadvice url-http-handle-authentication (around oauth-hack activate)
+(defun oauth2--url-http-handle-authentication-hack (orig-fun &rest args)
   (if (not oauth--url-advice)
-      ad-do-it
+      (apply orig-fun args)
     (let ((url-request-method url-http-method)
           (url-request-data url-http-data)
           (url-request-extra-headers
-           (oauth2-extra-headers url-http-extra-headers))))
-    (oauth2-refresh-access (car oauth--token-data))
-    (url-retrieve-internal (cdr oauth--token-data)
-               url-callback-function
-               url-callback-arguments)
-    ;; This is to make `url' think it's done.
-    (when (boundp 'success) (setq success t)) ;For URL library in Emacs<24.4.
-    (setq ad-return-value t)))                ;For URL library in Emacs≥24.4.
+           (oauth2-extra-headers url-http-extra-headers)))
+      (oauth2-refresh-access (car oauth--token-data))
+      (url-retrieve-internal (cdr oauth--token-data)
+                             url-callback-function
+                             url-callback-arguments)
+      ;; This is to make `url' think it's done.
+      (when (boundp 'success) (setq success t)) ;For URL library in Emacs<24.4.
+      t)))                                      ;For URL library in Emacs≥24.4.
+(advice-add 'url-http-handle-authentication :around
+            #'oauth2--url-http-handle-authentication-hack)
 
 ;;;###autoload
 (defun oauth2-url-retrieve-synchronously (token url &optional request-method request-data request-extra-headers)
