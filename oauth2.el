@@ -1,9 +1,9 @@
 ;;; oauth2.el --- OAuth 2.0 Authorization Protocol  -*- lexical-binding:t -*-
 
-;; Copyright (C) 2011-2020 Free Software Foundation, Inc
+;; Copyright (C) 2011-2021 Free Software Foundation, Inc
 
 ;; Author: Julien Danjou <julien@danjou.info>
-;; Version: 0.15
+;; Version: 0.16
 ;; Keywords: comm
 ;; Package-Requires: ((cl-lib "0.5") (nadvice "0.3"))
 
@@ -46,6 +46,12 @@
 (defvar url-http-extra-headers)
 (defvar url-callback-arguments)
 (defvar url-callback-function)
+
+(defgroup oauth2 nil
+  "OAuth 2.0 Authorization Protocol."
+  :group 'comm
+  :link '(url-link :tag "Savannah" "http://git.savannah.gnu.org/cgit/emacs/elpa.git/tree/?h=externals/oauth2")
+  :link '(url-link :tag "ELPA" "https://elpa.gnu.org/packages/oauth2.html"))
 
 (defun oauth2-request-authorization (auth-url client-id &optional scope state redirect-uri)
   "Request OAuth authorization at AUTH-URL by launching `browse-url'.
@@ -149,8 +155,7 @@ TOKEN should be obtained with `oauth2-request-access'."
 
 (defcustom oauth2-token-file (concat user-emacs-directory "oauth2.plstore")
   "File path where store OAuth tokens."
-  ;; FIXME: This var doesn't belong to any group.  Either add it to some
-  ;; pre-existing group or create an `oauth2' group for it.
+  :group 'oauth2
   :type 'file)
 
 (defun oauth2-compute-id (auth-url token-url scope)
