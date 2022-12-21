@@ -20,7 +20,7 @@
 ;; GNU General Public License for more details.
 
 ;; You should have received a copy of the GNU General Public License
-;; along with GNU Emacs.  If not, see <http://www.gnu.org/licenses/>.
+;; along with GNU Emacs.  If not, see <https://www.gnu.org/licenses/>.
 
 ;;; Commentary:
 
@@ -50,7 +50,7 @@
 (defgroup oauth2 nil
   "OAuth 2.0 Authorization Protocol."
   :group 'comm
-  :link '(url-link :tag "Savannah" "http://git.savannah.gnu.org/cgit/emacs/elpa.git/tree/?h=externals/oauth2")
+  :link '(url-link :tag "Savannah" "https://git.savannah.gnu.org/cgit/emacs/elpa.git/tree/?h=externals/oauth2")
   :link '(url-link :tag "ELPA" "https://elpa.gnu.org/packages/oauth2.html"))
 
 (defun oauth2-request-authorization (auth-url client-id &optional scope state redirect-uri)
