@@ -63,7 +63,11 @@ It returns the code provided by the service."
                      "&response_type=code"
                      "&redirect_uri=" (url-hexify-string (or redirect-uri "urn:ietf:wg:oauth:2.0:oob"))
                      (if scope (concat "&scope=" (url-hexify-string scope)) "")
-                     (if state (concat "&state=" (url-hexify-string state)) ""))))
+                     (if state (concat "&state=" (url-hexify-string state)) "")
+                     ;; The following two parameters are required for Gmail
+                     ;; OAuth2 to generate the refresh token
+                     "&access_type=offline"
+                     "&prompt=consent")))
     (browse-url url)
     (read-string (concat "Follow the instruction on your default browser, or "
                          "visit:\n" url
