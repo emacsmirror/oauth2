@@ -57,14 +57,17 @@
   "Request OAuth authorization at AUTH-URL by launching `browse-url'.
 CLIENT-ID is the client id provided by the provider.
 It returns the code provided by the service."
-  (browse-url (concat auth-url
-                      (if (string-match-p "\?" auth-url) "&" "?")
-                      "client_id=" (url-hexify-string client-id)
-                      "&response_type=code"
-                      "&redirect_uri=" (url-hexify-string (or redirect-uri "urn:ietf:wg:oauth:2.0:oob"))
-                      (if scope (concat "&scope=" (url-hexify-string scope)) "")
-                      (if state (concat "&state=" (url-hexify-string state)) "")))
-  (read-string "Enter the code your browser displayed: "))
+  (let ((url (concat auth-url
+                     (if (string-match-p "\?" auth-url) "&" "?")
+                     "client_id=" (url-hexify-string client-id)
+                     "&response_type=code"
+                     "&redirect_uri=" (url-hexify-string (or redirect-uri "urn:ietf:wg:oauth:2.0:oob"))
+                     (if scope (concat "&scope=" (url-hexify-string scope)) "")
+                     (if state (concat "&state=" (url-hexify-string state)) ""))))
+    (browse-url url)
+    (read-string (concat "Follow the instruction on your default browser, or "
+                         "visit:\n" url
+                         "\nEnter the code your browser displayed: "))))
 
 (defun oauth2-request-access-parse ()
   "Parse the result of an OAuth request."
