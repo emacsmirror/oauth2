@@ -108,13 +108,14 @@ Return an `oauth2-token' structure."
     (let ((result
            (oauth2-make-access-request
             token-url
-            (concat
-             "client_id=" client-id
-	     (when client-secret
-               (concat  "&client_secret=" client-secret))
-             "&code=" code
-             "&redirect_uri=" (url-hexify-string (or redirect-uri "urn:ietf:wg:oauth:2.0:oob"))
-             "&grant_type=authorization_code"))))
+            (url-encode-url
+             (concat
+              "client_id=" client-id
+              (when client-secret
+                (concat  "&client_secret=" client-secret))
+              "&code=" code
+              "&redirect_uri=" (or redirect-uri "urn:ietf:wg:oauth:2.0:oob")
+              "&grant_type=authorization_code")))))
       (make-oauth2-token :client-id client-id
                          :client-secret client-secret
                          :access-token (cdr (assoc 'access_token result))
