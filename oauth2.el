@@ -53,6 +53,15 @@
   :link '(url-link :tag "Savannah" "https://git.savannah.gnu.org/cgit/emacs/elpa.git/tree/?h=externals/oauth2")
   :link '(url-link :tag "ELPA" "https://elpa.gnu.org/packages/oauth2.html"))
 
+(defvar oauth2-debug nil
+  "Enable verbose logging in oauth2 to help debugging.")
+
+(defun oauth2--do-debug (&rest msg)
+  "Output debug messages when `oauth2-debug' is enabled."
+  (when oauth2-debug
+    (setcar msg (concat "[oauth2] " (car msg)))
+    (apply #'message msg)))
+
 (defun oauth2-request-authorization (auth-url client-id &optional scope state redirect-uri)
   "Request OAuth authorization at AUTH-URL by launching `browse-url'.
 CLIENT-ID is the client id provided by the provider.
@@ -81,14 +90,18 @@ It returns the code provided by the service."
 
 (defun oauth2-make-access-request (url data)
   "Make an access request to URL using DATA in POST."
-  (let ((url-request-method "POST")
-        (url-request-data data)
-        (url-request-extra-headers
-         '(("Content-Type" . "application/x-www-form-urlencoded"))))
-    (with-current-buffer (url-retrieve-synchronously url)
-      (let ((data (oauth2-request-access-parse)))
-        (kill-buffer (current-buffer))
-        data))))
+  (let ((func-name (nth 1 (backtrace-frame 3))))
+    (oauth2--do-debug "%s: url: %s" func-name url)
+    (oauth2--do-debug "%s: data: %s" func-name data)
+    (let ((url-request-method "POST")
+          (url-request-data data)
+          (url-request-extra-headers
+           '(("Content-Type" . "application/x-www-form-urlencoded"))))
+      (with-current-buffer (url-retrieve-synchronously url)
+        (let ((data (oauth2-request-access-parse)))
+          (kill-buffer (current-buffer))
+          (oauth2--do-debug "%s: response: %s" func-name (prin1-to-string data))
+          data)))))
 
 (cl-defstruct oauth2-token
   plstore
