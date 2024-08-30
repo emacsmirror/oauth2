@@ -3,7 +3,7 @@
 ;; Copyright (C) 2011-2021 Free Software Foundation, Inc
 
 ;; Author: Julien Danjou <julien@danjou.info>
-;; Version: 0.16
+;; Version: 0.17
 ;; Keywords: comm
 ;; Package-Requires: ((cl-lib "0.5") (nadvice "0.3"))
 
