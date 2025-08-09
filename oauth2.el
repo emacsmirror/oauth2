@@ -53,8 +53,16 @@
   :link '(url-link :tag "Savannah" "https://git.savannah.gnu.org/cgit/emacs/elpa.git/tree/?h=externals/oauth2")
   :link '(url-link :tag "ELPA" "https://elpa.gnu.org/packages/oauth2.html"))
 
+(defcustom oauth2-token-file (concat user-emacs-directory "oauth2.plstore")
+  "File path where store OAuth tokens."
+  :group 'oauth2
+  :type 'file)
+
 (defvar oauth2-debug nil
   "Enable verbose logging in oauth2 to help debugging.")
+
+(defvar oauth--url-advice nil)
+(defvar oauth--token-data)
 
 (defun oauth2--do-debug (&rest msg)
   "Output debug messages when `oauth2-debug' is enabled."
@@ -174,11 +182,6 @@ TOKEN should be obtained with `oauth2-request-access'."
     auth-url client-id scope state redirect-uri)
    redirect-uri))
 
-(defcustom oauth2-token-file (concat user-emacs-directory "oauth2.plstore")
-  "File path where store OAuth tokens."
-  :group 'oauth2
-  :type 'file)
-
 (defun oauth2-compute-id (auth-url token-url scope client-id)
   "Compute an unique id based on URLs.
 This allows to store the token in an unique way."
@@ -221,9 +224,6 @@ This allows to store the token in an unique way."
   (concat url
           (if (string-match-p "\?" url) "&" "?")
           "access_token=" (oauth2-token-access-token token)))
-
-(defvar oauth--url-advice nil)
-(defvar oauth--token-data)
 
 (defun oauth2-authz-bearer-header (token)
   "Return `Authoriztions: Bearer' header with TOKEN."
