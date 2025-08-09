@@ -4,8 +4,9 @@
 
 ;; Author: Julien Danjou <julien@danjou.info>
 ;; Version: 0.17
+;; URL: https://elpa.gnu.org/packages/oauth2.html
 ;; Keywords: comm
-;; Package-Requires: ((cl-lib "0.5"))
+;; Package-Requires: ((emacs "27.1"))
 
 ;; This file is part of GNU Emacs.
 
