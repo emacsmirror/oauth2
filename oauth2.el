@@ -84,6 +84,13 @@
   (when oauth2-debug
     (apply #'oauth2--do-warn msg)))
 
+(defmacro oauth2--with-plstore (&rest body)
+  "A macro that ensures the plstore is closed after use."
+  `(let ((plstore (plstore-open oauth2-token-file)))
+     (unwind-protect
+         (progn ,@body)
+       (plstore-close plstore))))
+
 (defun oauth2--current-timestamp ()
   "Get the current timestamp in seconds."
   (time-convert nil 'integer))
@@ -231,7 +238,7 @@ TOKEN should be obtained with `oauth2-request-access'."
                                "&refresh_token="
                                (oauth2-token-refresh-token token)
                                "&grant_type=refresh_token")))))
-    (when-let* ((plstore (oauth2-token-plstore token)))
+    (oauth2--with-plstore
      (oauth2--update-plstore plstore token)))
 
   token)
@@ -267,31 +274,29 @@ redirect response.
 
 Returns an `oauth2-token'."
   ;; We store a MD5 sum of all URL
-  (let* ((plstore (plstore-open oauth2-token-file))
-         (plstore-id (oauth2-compute-id auth-url token-url scope client-id))
-         (plist (cdr (plstore-get plstore plstore-id))))
-    ;; Check if we found something matching this access
-    (if plist
-        ;; We did, return the token object
-        (make-oauth2-token :plstore plstore
-                           :plstore-id plstore-id
-                           :client-id client-id
-                           :client-secret client-secret
-                           :access-token (plist-get plist :access-token)
-                           :refresh-token (plist-get plist :refresh-token)
-                           :request-timestamp (plist-get plist
-                                                         :request-timestamp)
-                           :auth-url auth-url
-                           :token-url token-url
-                           :access-response (plist-get plist :access-response))
-      (let ((token (oauth2-auth auth-url token-url
-                                client-id client-secret state
-                                redirect-uri)))
-        ;; Set the plstore
-        (setf (oauth2-token-plstore token) plstore)
-        (setf (oauth2-token-plstore-id token) plstore-id)
-        (oauth2--update-plstore plstore token)
-        token))))
+  (oauth2--with-plstore
+   (let* ((plstore-id (oauth2-compute-id auth-url token-url scope client-id))
+          (plist (cdr (plstore-get plstore plstore-id))))
+     ;; Check if we found something matching this access
+     (if plist
+         ;; We did, return the token object
+         (make-oauth2-token :plstore-id plstore-id
+                            :client-id client-id
+                            :client-secret client-secret
+                            :access-token (plist-get plist :access-token)
+                            :refresh-token (plist-get plist :refresh-token)
+                            :request-timestamp (plist-get plist
+                                                          :request-timestamp)
+                            :auth-url auth-url
+                            :token-url token-url
+                            :access-response (plist-get plist :access-response))
+       (let ((token (oauth2-auth auth-url token-url
+                                 client-id client-secret state
+                                 redirect-uri)))
+         ;; Set the plstore
+         (setf (oauth2-token-plstore-id token) plstore-id)
+         (oauth2--update-plstore plstore token)
+         token)))))
 
 (provide 'oauth2)
 
