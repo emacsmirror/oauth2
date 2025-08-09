@@ -5,7 +5,7 @@
 ;; Author: Julien Danjou <julien@danjou.info>
 ;; Version: 0.17
 ;; Keywords: comm
-;; Package-Requires: ((cl-lib "0.5") (nadvice "0.3"))
+;; Package-Requires: ((cl-lib "0.5"))
 
 ;; This file is part of GNU Emacs.
 
@@ -247,76 +247,6 @@ Returns an `oauth2-token'."
                                       ,(oauth2-token-access-response token)))
         (plstore-save plstore)
         token))))
-
-(defun oauth2-url-append-access-token (token url)
-  "Append access token to URL."
-  (concat url
-          (if (string-match-p "\?" url) "&" "?")
-          "access_token=" (oauth2-token-access-token token)))
-
-(defun oauth2-authz-bearer-header (token)
-  "Return `Authoriztions: Bearer' header with TOKEN."
-  (cons "Authorization" (format "Bearer %s" token)))
-
-(defun oauth2-extra-headers (extra-headers)
-  "Return EXTRA-HEADERS with `Authorization: Bearer' added."
-  (cons (oauth2-authz-bearer-header
-         (oauth2-token-access-token (car oauth2--token-data)))
-        extra-headers))
-
-
-;; FIXME: We should change URL so that this can be done without an advice.
-(defun oauth2--url-http-handle-authentication-hack (orig-fun &rest args)
-  (if (not oauth2--url-advice)
-      (apply orig-fun args)
-    (let ((url-request-method url-http-method)
-          (url-request-data url-http-data)
-          (url-request-extra-headers
-           (oauth2-extra-headers url-http-extra-headers)))
-      (oauth2-refresh-access (car oauth2--token-data))
-      (url-retrieve-internal (cdr oauth2--token-data)
-                             url-callback-function
-                             url-callback-arguments)
-      ;; This is to make `url' think it's done.
-      (when (boundp 'success) (setq success t)) ;For URL library in Emacs<24.4.
-      t)))                                      ;For URL library in Emacs≥24.4.
-(advice-add 'url-http-handle-authentication :around
-            #'oauth2--url-http-handle-authentication-hack)
-
-;;;###autoload
-(defun oauth2-url-retrieve-synchronously (token url &optional request-method
-                                                request-data
-                                                request-extra-headers)
-  "Retrieve an URL synchronously using TOKEN to access it.
-TOKEN can be obtained with `oauth2-auth'.  REQUEST-METHOD, REQUEST-DATA,
-and REQUEST-EXTRA-HEADERS are used when retrieving URL.  See also
-`url-retrieve-synchronously'."
-  (let* ((oauth2--token-data (cons token url)))
-    (let ((oauth2--url-advice t)         ;Activate our advice.
-          (url-request-method request-method)
-          (url-request-data request-data)
-          (url-request-extra-headers
-           (oauth2-extra-headers request-extra-headers)))
-      (url-retrieve-synchronously url))))
-
-;;;###autoload
-(defun oauth2-url-retrieve (token url callback
-                                  &optional cbargs request-method request-data
-                                  request-extra-headers)
-  "Retrieve an URL asynchronously using TOKEN to access it.
-TOKEN can be obtained with `oauth2-auth'.  CALLBACK gets called with
-CBARGS when finished. TOKEN can be obtained with `oauth2-auth'.
-REQUEST-METHOD, REQUEST-DATA, and REQUEST-EXTRA-HEADERS are used when
-retrieving URL.  See also `url-retrieve'."
-  ;; TODO add support for SILENT and INHIBIT-COOKIES.  How to handle this in
-  ;; `url-http-handle-authentication'.
-  (let* ((oauth2--token-data (cons token url)))
-    (let ((oauth2--url-advice t)         ;Activate our advice.
-          (url-request-method request-method)
-          (url-request-data request-data)
-          (url-request-extra-headers
-           (oauth2-extra-headers request-extra-headers)))
-      (url-retrieve url callback cbargs))))
 
 (provide 'oauth2)
 
