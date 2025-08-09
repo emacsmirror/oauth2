@@ -247,7 +247,7 @@ TOKEN should be obtained with `oauth2-request-access'."
 
 ;;;###autoload
 (defun oauth2-auth (auth-url token-url client-id client-secret
-                             &optional state redirect-uri)
+                             &optional scope state redirect-uri)
   "Authenticate application via OAuth2."
   (oauth2-request-access
    auth-url
@@ -293,7 +293,7 @@ Returns an `oauth2-token'."
                             :token-url token-url
                             :access-response (plist-get plist :access-response))
        (let ((token (oauth2-auth auth-url token-url
-                                 client-id client-secret state
+                                 client-id client-secret scope state
                                  redirect-uri)))
          ;; Set the plstore
          (setf (oauth2-token-plstore-id token) plstore-id)
