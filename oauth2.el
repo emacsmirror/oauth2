@@ -65,11 +65,24 @@
 (defvar oauth2--url-advice nil)
 (defvar oauth2--token-data)
 
+(defun oauth2--do-warn (&rest msg)
+  "Actual function to log MSG based on how `oauth2-debug' is set."
+  (setcar msg (concat "[oauth2] " (car msg)))
+  (apply (if (functionp oauth2-debug)
+             oauth2-debug
+           'message)
+         msg))
+
+(defun oauth2--do-trivia (&rest msg)
+  "Output debug message when `oauth2-debug' is set to \\='trivia."
+  (when (or (eq oauth2-debug 'trivia)
+            (functionp oauth2-debug))
+    (apply #'oauth2--do-warn msg)))
+
 (defun oauth2--do-debug (&rest msg)
   "Output debug messages when `oauth2-debug' is enabled."
   (when oauth2-debug
-    (setcar msg (concat "[oauth2] " (car msg)))
-    (apply #'message msg)))
+    (apply #'oauth2--do-warn msg)))
 
 (defun oauth2-request-authorization (auth-url client-id &optional scope state
                                               redirect-uri)
@@ -109,8 +122,8 @@ Returns the code provided by the service."
 (defun oauth2-make-access-request (url data)
   "Make an access request to URL using DATA in POST requests."
   (let ((func-name (nth 1 (backtrace-frame 2))))
-    (oauth2--do-debug "%s: url: %s" func-name url)
-    (oauth2--do-debug "%s: data: %s" func-name data)
+    (oauth2--do-trivia "%s: url: %s" func-name url)
+    (oauth2--do-trivia "%s: data: %s" func-name data)
     (let ((url-request-method "POST")
           (url-request-data data)
           (url-request-extra-headers
@@ -118,7 +131,8 @@ Returns the code provided by the service."
       (with-current-buffer (url-retrieve-synchronously url)
         (let ((data (oauth2-request-access-parse)))
           (kill-buffer (current-buffer))
-          (oauth2--do-debug "%s: response: %s" func-name (prin1-to-string data))
+          (oauth2--do-trivia "%s: response: %s" func-name
+                             (prin1-to-string data))
           data)))))
 
 (cl-defstruct oauth2-token
