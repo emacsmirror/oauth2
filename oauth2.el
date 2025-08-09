@@ -90,7 +90,7 @@ It returns the code provided by the service."
 
 (defun oauth2-make-access-request (url data)
   "Make an access request to URL using DATA in POST."
-  (let ((func-name (nth 1 (backtrace-frame 3))))
+  (let ((func-name (nth 1 (backtrace-frame 2))))
     (oauth2--do-debug "%s: url: %s" func-name url)
     (oauth2--do-debug "%s: data: %s" func-name data)
     (let ((url-request-method "POST")
