@@ -61,8 +61,8 @@
 (defvar oauth2-debug nil
   "Enable verbose logging in oauth2 to help debugging.")
 
-(defvar oauth--url-advice nil)
-(defvar oauth--token-data)
+(defvar oauth2--url-advice nil)
+(defvar oauth2--token-data)
 
 (defun oauth2--do-debug (&rest msg)
   "Output debug messages when `oauth2-debug' is enabled."
@@ -231,20 +231,20 @@ This allows to store the token in an unique way."
 
 (defun oauth2-extra-headers (extra-headers)
   "Return EXTRA-HEADERS with `Authorization: Bearer' added."
-  (cons (oauth2-authz-bearer-header (oauth2-token-access-token (car oauth--token-data)))
+  (cons (oauth2-authz-bearer-header (oauth2-token-access-token (car oauth2--token-data)))
         extra-headers))
 
 
 ;; FIXME: We should change URL so that this can be done without an advice.
 (defun oauth2--url-http-handle-authentication-hack (orig-fun &rest args)
-  (if (not oauth--url-advice)
+  (if (not oauth2--url-advice)
       (apply orig-fun args)
     (let ((url-request-method url-http-method)
           (url-request-data url-http-data)
           (url-request-extra-headers
            (oauth2-extra-headers url-http-extra-headers)))
-      (oauth2-refresh-access (car oauth--token-data))
-      (url-retrieve-internal (cdr oauth--token-data)
+      (oauth2-refresh-access (car oauth2--token-data))
+      (url-retrieve-internal (cdr oauth2--token-data)
                              url-callback-function
                              url-callback-arguments)
       ;; This is to make `url' think it's done.
@@ -257,8 +257,8 @@ This allows to store the token in an unique way."
 (defun oauth2-url-retrieve-synchronously (token url &optional request-method request-data request-extra-headers)
   "Retrieve an URL synchronously using TOKEN to access it.
 TOKEN can be obtained with `oauth2-auth'."
-  (let* ((oauth--token-data (cons token url)))
-    (let ((oauth--url-advice t)         ;Activate our advice.
+  (let* ((oauth2--token-data (cons token url)))
+    (let ((oauth2--url-advice t)         ;Activate our advice.
           (url-request-method request-method)
           (url-request-data request-data)
           (url-request-extra-headers
@@ -273,8 +273,8 @@ TOKEN can be obtained with `oauth2-auth'."
 TOKEN can be obtained with `oauth2-auth'.  CALLBACK gets called with CBARGS
 when finished.  See `url-retrieve'."
   ;; TODO add support for SILENT and INHIBIT-COOKIES.  How to handle this in `url-http-handle-authentication'.
-  (let* ((oauth--token-data (cons token url)))
-    (let ((oauth--url-advice t)         ;Activate our advice.
+  (let* ((oauth2--token-data (cons token url)))
+    (let ((oauth2--url-advice t)         ;Activate our advice.
           (url-request-method request-method)
           (url-request-data request-data)
           (url-request-extra-headers
