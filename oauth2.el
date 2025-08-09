@@ -56,7 +56,7 @@
                    "https://git.savannah.gnu.org/cgit/emacs/elpa.git/tree/?h=externals/oauth2")
   :link '(url-link :tag "ELPA" "https://elpa.gnu.org/packages/oauth2.html"))
 
-(defcustom oauth2-token-file (concat user-emacs-directory "oauth2.plstore")
+(defcustom oauth2-token-file (locate-user-emacs-file "oauth2.plstore")
   "File path where store OAuth tokens."
   :group 'oauth2
   :type 'file)
