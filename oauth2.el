@@ -187,7 +187,6 @@ Returns an `oauth2-token'."
     (let ((request-timestamp (oauth2--current-timestamp))
           (result
            (oauth2-make-access-request
-            auth-url
             token-url
             (url-encode-url
              (concat
