@@ -84,6 +84,23 @@
   (when oauth2-debug
     (apply #'oauth2--do-warn msg)))
 
+(defun oauth2--current-timestamp ()
+  "Get the current timestamp in seconds."
+  (time-convert nil 'integer))
+
+(defun oauth2--update-plstore (plstore token)
+  "Update the file storage with handle PLSTORE with the value in TOKEN."
+  (plstore-put plstore (oauth2-token-plstore-id token)
+               nil `(:access-token
+                     ,(oauth2-token-access-token token)
+                     :refresh-token
+                     ,(oauth2-token-refresh-token token)
+                     :request-timestamp
+                     ,(oauth2-token-request-timestamp token)
+                     :access-response
+                     ,(oauth2-token-access-response token)))
+  (plstore-save plstore))
+
 (defun oauth2-request-authorization (auth-url client-id &optional scope state
                                               redirect-uri)
   "Request OAuth authorization at AUTH-URL by launching `browse-url'.
@@ -142,11 +159,13 @@ Returns the code provided by the service."
   client-secret
   access-token
   refresh-token
+  request-timestamp
+  auth-url
   token-url
   access-response)
 
-(defun oauth2-request-access (token-url client-id client-secret code
-                                        &optional redirect-uri)
+(defun oauth2-request-access (auth-url token-url client-id client-secret code
+                                       &optional redirect-uri)
   "Request OAuth access.
 TOKEN-URL is the URL for making the request.  CLIENT-ID and
 CLIENT-SECRET are provided by the service provider.  The CODE should be
@@ -156,8 +175,10 @@ usually \"urn:ietf:wg:oauth:2.0:oob\".
 
 Returns an `oauth2-token'."
   (when code
-    (let ((result
+    (let ((request-timestamp (oauth2--current-timestamp))
+          (result
            (oauth2-make-access-request
+            auth-url
             token-url
             (url-encode-url
              (concat
@@ -171,6 +192,8 @@ Returns an `oauth2-token'."
                          :client-secret client-secret
                          :access-token (cdr (assoc 'access_token result))
                          :refresh-token (cdr (assoc 'refresh_token result))
+                         :request-timestamp request-timestamp
+                         :auth-url auth-url
                          :token-url token-url
                          :access-response result))))
 
@@ -178,36 +201,47 @@ Returns an `oauth2-token'."
 (defun oauth2-refresh-access (token)
   "Refresh OAuth access TOKEN.
 TOKEN should be obtained with `oauth2-request-access'."
-  (setf (oauth2-token-access-token token)
-        (cdr (assoc 'access_token
-                    (oauth2-make-access-request
-                     (oauth2-token-token-url token)
-                     (concat "client_id=" (oauth2-token-client-id token)
-                             (when (oauth2-token-client-secret token)
-                               (concat "&client_secret="
-                                       (oauth2-token-client-secret token)))
-                             "&refresh_token="
-                             (oauth2-token-refresh-token token)
-                             "&grant_type=refresh_token")))))
-  ;; If the token has a plstore, update it
-  (let ((plstore (oauth2-token-plstore token)))
-    (when plstore
-      (plstore-put plstore (oauth2-token-plstore-id token)
-                   nil `(:access-token
-                         ,(oauth2-token-access-token token)
-                         :refresh-token
-                         ,(oauth2-token-refresh-token token)
-                         :access-response
-                         ,(oauth2-token-access-response token)
-                         ))
-      (plstore-save plstore)))
+  (if-let* ((func-name (nth 1 (backtrace-frame 2)))
+            (current-timestamp (oauth2--current-timestamp))
+            (request-timestamp (oauth2-token-request-timestamp token))
+            (timestamp-difference (- current-timestamp request-timestamp))
+            (expires-in (cdr (assoc 'expires_in
+                                    (oauth2-token-access-response token))))
+            (cache-valid
+             (progn
+               (oauth2--do-trivia (concat "%s: current-timestamp: %d, "
+                                          "previous request-timestamp: %d, "
+                                          "timestamp difference: %d; "
+                                          "expires-in: %d, ")
+                                  func-name current-timestamp request-timestamp
+                                  timestamp-difference expires-in)
+               (< timestamp-difference expires-in))))
+      (oauth2--do-debug "%s: reusing cached access-token." func-name)
+
+    (oauth2--do-debug "%s: requesting new access-token." func-name)
+    (setf (oauth2-token-request-timestamp token) current-timestamp)
+    (setf (oauth2-token-access-token token)
+          (cdr (assoc 'access_token
+                      (oauth2-make-access-request
+                       (oauth2-token-token-url token)
+                       (concat "client_id=" (oauth2-token-client-id token)
+                               (when (oauth2-token-client-secret token)
+                                 (concat "&client_secret="
+                                         (oauth2-token-client-secret token)))
+                               "&refresh_token="
+                               (oauth2-token-refresh-token token)
+                               "&grant_type=refresh_token")))))
+    (when-let* ((plstore (oauth2-token-plstore token)))
+     (oauth2--update-plstore plstore token)))
+
   token)
 
 ;;;###autoload
 (defun oauth2-auth (auth-url token-url client-id client-secret
-                             &optional scope state redirect-uri)
+                             &optional state redirect-uri)
   "Authenticate application via OAuth2."
   (oauth2-request-access
+   auth-url
    token-url
    client-id
    client-secret
@@ -234,32 +268,29 @@ redirect response.
 Returns an `oauth2-token'."
   ;; We store a MD5 sum of all URL
   (let* ((plstore (plstore-open oauth2-token-file))
-         (id (oauth2-compute-id auth-url token-url scope client-id))
-         (plist (cdr (plstore-get plstore id))))
+         (plstore-id (oauth2-compute-id auth-url token-url scope client-id))
+         (plist (cdr (plstore-get plstore plstore-id))))
     ;; Check if we found something matching this access
     (if plist
         ;; We did, return the token object
         (make-oauth2-token :plstore plstore
-                           :plstore-id id
+                           :plstore-id plstore-id
                            :client-id client-id
                            :client-secret client-secret
                            :access-token (plist-get plist :access-token)
                            :refresh-token (plist-get plist :refresh-token)
+                           :request-timestamp (plist-get plist
+                                                         :request-timestamp)
+                           :auth-url auth-url
                            :token-url token-url
                            :access-response (plist-get plist :access-response))
       (let ((token (oauth2-auth auth-url token-url
-                                client-id client-secret scope state
+                                client-id client-secret state
                                 redirect-uri)))
         ;; Set the plstore
         (setf (oauth2-token-plstore token) plstore)
-        (setf (oauth2-token-plstore-id token) id)
-        (plstore-put plstore id nil `(:access-token
-                                      ,(oauth2-token-access-token token)
-                                      :refresh-token
-                                      ,(oauth2-token-refresh-token token)
-                                      :access-response
-                                      ,(oauth2-token-access-response token)))
-        (plstore-save plstore)
+        (setf (oauth2-token-plstore-id token) plstore-id)
+        (oauth2--update-plstore plstore token)
         token))))
 
 (provide 'oauth2)
