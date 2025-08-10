@@ -138,6 +138,8 @@ Returns nil if the slot is unavailable."
   (plstore-put plstore (oauth2-token-plstore-id token)
                nil `(:request-cache
                      ,(oauth2-token-request-cache token)
+                     :code-verifier
+                     ,(oauth2-token-code-verifier token)
                      :access-response
                      ,(oauth2-token-access-response token)))
   (plstore-save plstore))
@@ -177,8 +179,33 @@ address to build the full URL."
                       (url-encode-url (car data))))))
     (concat address "?" data-str)))
 
+(defun oauth2--generate-code-verifier (&optional verifier-length)
+  "Generate a random string of VERIFIER-LENGTH long for code_challenge.
+The string should be of length 43 to 128 (inclusive).  If
+VERIFIER-LENGTH is nil, we default to 90 as mutt_oauth2.py did.  See
+RFC7636 for more details."
+  (let* ((func-name "oauth2--generate-code-verifier")
+         (valid-chars
+          "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
+         (verifier-length (or verifier-length 90))
+         result-list)
+    (dotimes (_ verifier-length)
+      (let ((i (random (length valid-chars))))
+        (push (substring valid-chars i (1+ i)) result-list)))
+    (base64url-encode-string (string-join result-list))))
+
+(defun oauth2--get-challenge-from-verifier (code-verifier)
+  "Get the code_challenge from CODE-VERIFIER."
+  ;; base64url-encode-string returns a string that ends with '=' so the last
+  ;; character should be skipped.
+  (substring (base64url-encode-string (secure-hash 'sha256
+                                                   code-verifier
+                                                   nil nil t))
+             0 -1))
+
 (defun oauth2-request-authorization (auth-url client-id &optional scope state
-                                              redirect-uri user-name)
+                                              redirect-uri user-name
+                                              code-verifier)
   "Request OAuth authorization at AUTH-URL by launching `browse-url'.
 CLIENT-ID is the client id provided by the provider which uses
 REDIRECT-URI when requesting an access-token.  The default redirect_uri
@@ -187,20 +214,30 @@ identifies the resources that your application can access on the user's
 behalf.  STATE is a string that your application uses to maintain the
 state between the request and redirect response. USER-NAME is used to
 provide the login_hint which will fill the login user name on the
-requesting webpage to save users some typing.
+requesting webpage to save users some typing.  CODE-VERIFIER when
+provided enables the PKCE extension and will generate and provide the
+code_challenge using method S256 when requesting authorization.
 
 Returns the code provided by the service."
   (let* ((func-name "oauth2-request-authorization")
-         (url (oauth2--build-url auth-url
-                                 "client_id" client-id
-                                 "response_type" "code"
-                                 "redirect_uri"
-                                 (or redirect-uri oauth2--default-redirect-uri)
-                                 "scope" scope
-                                 "state" state
-                                 "login_hint" user-name
-                                 "access_type" "offline"
-                                 "prompt" "consent")))
+         (url (let ((param `("client_id" ,client-id
+                             "response_type" "code"
+                             "redirect_uri"
+                             ,(or redirect-uri oauth2--default-redirect-uri)
+                             "scope" ,scope
+                             "state" ,state
+                             "login_hint" ,user-name
+                             "access_type" "offline"
+                             "prompt" "consent")))
+                (when (and code-verifier
+                           (not (string-empty-p code-verifier)))
+                  (setq param (plist-put param "code_challenge"
+                                         (oauth2--get-challenge-from-verifier
+                                          code-verifier)))
+                  (setq param (plist-put param
+                                         "code_challenge_method" "S256")))
+                (add-to-list 'param auth-url)
+                (apply 'oauth2--build-url param))))
     (oauth2--do-trivia "[%s]: url: %s" func-name url)
     (browse-url url)
     (read-string (concat "Follow the instruction on your default browser, or "
@@ -237,12 +274,14 @@ Returns the code provided by the service."
   access-token
   refresh-token
   request-cache
+  code-verifier
   auth-url
   token-url
   access-response)
 
 (defun oauth2-request-access (auth-url token-url client-id client-secret code
-                                       &optional redirect-uri host-name)
+                                       &optional redirect-uri host-name
+                                       code-verifier)
   "Request OAuth access.
 TOKEN-URL is the URL for making the request.  CLIENT-ID and
 CLIENT-SECRET are provided by the service provider.  The CODE should be
@@ -252,7 +291,8 @@ usually \"urn:ietf:wg:oauth:2.0:oob\".  HOST-NAME is the server to
 request access, e.g. IMAP or SMTP server address.  Its value should
 match the one when calling `oauth2-auth-and-store'.  Leaving HOST-NAME
 as nil effectively disables caching and will request a new token on each
-request.
+request.  CODE-VERIFIER is used for the PKCE extension and is required
+when it was already provided during authorization.
 
 Returns an `oauth2-token'."
   (when code
@@ -263,6 +303,7 @@ Returns an `oauth2-token'."
                               "client_id" client-id
                               "client_secret" client-secret
                               "code" code
+                              "code_verifier" code-verifier
                               "redirect_uri" (or redirect-uri
                                                  oauth2--default-redirect-uri)
                               "grant_type" "authorization_code")))
@@ -276,6 +317,7 @@ Returns an `oauth2-token'."
                          :access-token access-token
                          :refresh-token refresh-token
                          :request-cache request-cache
+                         :code-verifier code-verifier
                          :auth-url auth-url
                          :token-url token-url
                          :access-response access-response))))
@@ -331,7 +373,7 @@ TOKEN should be obtained with `oauth2-request-access'."
 ;;;###autoload
 (defun oauth2-auth (auth-url token-url client-id client-secret
                              &optional scope state redirect-uri user-name
-                             host-name)
+                             host-name code-verifier)
   "Authenticate application via OAuth2."
   (oauth2-request-access
    auth-url
@@ -339,9 +381,10 @@ TOKEN should be obtained with `oauth2-request-access'."
    client-id
    client-secret
    (oauth2-request-authorization auth-url client-id scope state redirect-uri
-                                 user-name)
+                                 user-name code-verifier)
    redirect-uri
-   host-name))
+   host-name
+   code-verifier))
 
 (defun oauth2-compute-id (auth-url token-url scope client-id user-name)
   "Compute an unique id mainly to use as plstore id.
@@ -352,7 +395,7 @@ USER-NAME to ensure the plstore id is unique."
 ;;;###autoload
 (defun oauth2-auth-and-store (auth-url token-url scope client-id client-secret
                                        &optional redirect-uri state user-name
-                                       host-name)
+                                       host-name use-pkce)
   "Request access to a resource and store it.
 AUTH-URL and TOKEN-URL are provided by the service provider.  CLIENT-ID
 and CLIENT-SECRET should be generated by the service provider when a
@@ -363,7 +406,9 @@ redirect response. USER-NAME is the login user name and is required to
 provide a unique plstore id for users on the same service provider.
 HOST-NAME is the server to request authentication, e.g. IMAP or SMTP
 server address.  Leaving HOST-NAME as nil effectively disables caching
-and will request a new token on each refresh.
+and will request a new token on each refresh.  USE-PKCE controls whether
+to enable the PKCE extension of RFC7636 which is supported by most
+OAuth2 providers and recommended.
 
 Returns an `oauth2-token'."
   ;; We store a MD5 sum of all URL
@@ -381,7 +426,8 @@ Returns an `oauth2-token'."
                (request-cache (plist-get plist :request-cache))
                (access-token (or (oauth2--get-from-request-cache
                                   request-cache host-name :access-token)
-                                 "")))
+                                 ""))
+               (code-verifier (plist-get plist :code-verifier)))
          (progn
            (oauth2--do-trivia "[%s]: found matching plstore-id from plstore."
                               func-name)
@@ -391,6 +437,7 @@ Returns an `oauth2-token'."
                               :access-token access-token
                               :refresh-token refresh-token
                               :request-cache request-cache
+                              :code-verifier code-verifier
                               :auth-url auth-url
                               :token-url token-url
                               :access-response access-response))
@@ -398,9 +445,13 @@ Returns an `oauth2-token'."
         (concat "[%s]: no matching plstore-id found or cache invalid.  "
                 "Requesting new oauth2-token.")
         func-name)
-       (let ((token (oauth2-auth auth-url token-url
-                                 client-id client-secret scope state
-                                 redirect-uri user-name host-name)))
+       (let* ((code-verifier (if use-pkce
+                                 (oauth2--generate-code-verifier)
+                               ""))
+              (token (oauth2-auth auth-url token-url
+                                  client-id client-secret scope state
+                                  redirect-uri user-name host-name
+                                  code-verifier)))
          ;; Set the plstore
          (setf (oauth2-token-plstore-id token) plstore-id)
          (oauth2--update-plstore plstore token)
