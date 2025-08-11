@@ -158,7 +158,8 @@ behalf.  STATE is a string that your application uses to maintain the
 state between the request and redirect response.
 
 Returns the code provided by the service."
-  (let* ((url (oauth2--build-url auth-url
+  (let* ((func-name "oauth2-request-authorization")
+         (url (oauth2--build-url auth-url
                                  "client_id" client-id
                                  "response_type" "code"
                                  "redirect_uri"
@@ -167,6 +168,7 @@ Returns the code provided by the service."
                                  "state" state
                                  "access_type" "offline"
                                  "prompt" "consent")))
+    (oauth2--do-trivia "[%s]: url: %s" func-name url)
     (browse-url url)
     (read-string (concat "Follow the instruction on your default browser, or "
                          "visit:\n" url
@@ -180,9 +182,9 @@ Returns the code provided by the service."
 
 (defun oauth2-make-access-request (url data)
   "Make an access request to URL using DATA in POST requests."
-  (let ((func-name (nth 1 (backtrace-frame 2))))
-    (oauth2--do-trivia "%s: url: %s" func-name url)
-    (oauth2--do-trivia "%s: data: %s" func-name data)
+  (let ((func-name "oauth2-make-access-request"))
+    (oauth2--do-trivia "[%s]: url: %s" func-name url)
+    (oauth2--do-trivia "[%s]: data: %s" func-name data)
     (let ((url-request-method "POST")
           (url-request-data data)
           (url-request-extra-headers
@@ -190,7 +192,7 @@ Returns the code provided by the service."
       (with-current-buffer (url-retrieve-synchronously url)
         (let ((data (oauth2-request-access-parse)))
           (kill-buffer (current-buffer))
-          (oauth2--do-trivia "%s: response: %s" func-name
+          (oauth2--do-trivia "[%s]: response: %s" func-name
                              (prin1-to-string data))
           data)))))
 
@@ -240,7 +242,7 @@ Returns an `oauth2-token'."
 (defun oauth2-refresh-access (token)
   "Refresh OAuth access TOKEN.
 TOKEN should be obtained with `oauth2-request-access'."
-  (if-let* ((func-name (nth 1 (backtrace-frame 2)))
+  (if-let* ((func-name "oauth2-refresh-access")
             (current-timestamp (oauth2--current-timestamp))
             (request-timestamp (oauth2-token-request-timestamp token))
             (timestamp-difference (- current-timestamp request-timestamp))
@@ -248,16 +250,16 @@ TOKEN should be obtained with `oauth2-request-access'."
                                     (oauth2-token-access-response token))))
             (cache-valid
              (progn
-               (oauth2--do-trivia (concat "%s: current-timestamp: %d, "
+               (oauth2--do-trivia (concat "[%s]: current-timestamp: %d, "
                                           "previous request-timestamp: %d, "
                                           "timestamp difference: %d; "
                                           "expires-in: %d, ")
                                   func-name current-timestamp request-timestamp
                                   timestamp-difference expires-in)
                (< timestamp-difference expires-in))))
-      (oauth2--do-debug "%s: reusing cached access-token." func-name)
+      (oauth2--do-debug "[%s]: reusing cached access-token." func-name)
 
-    (oauth2--do-debug "%s: requesting new access-token." func-name)
+    (oauth2--do-debug "[%s]: requesting new access-token." func-name)
     (let* ((client-id (oauth2-token-client-id token))
            (client-secret (oauth2-token-client-secret token))
            (refresh-token (oauth2-token-refresh-token token))
@@ -311,16 +313,18 @@ provide a unique plstore id for users on the same service provider.
 Returns an `oauth2-token'."
   ;; We store a MD5 sum of all URL
   (oauth2--with-plstore
-   (let* ((plstore-id (oauth2-compute-id auth-url token-url scope client-id
+   (let* ((func-name "oauth2-auth-and-store")
+          (plstore-id (oauth2-compute-id auth-url token-url scope client-id
                                          user-name))
           (plist (cdr (plstore-get plstore plstore-id))))
-     (oauth2--do-trivia "user-name: %s\nplstore-id: %s"
-                        user-name plstore-id)
+     (oauth2--do-trivia "[%s]: user-name: %s\nplstore-id: %s"
+                        func-name user-name plstore-id)
      ;; Check if we found something matching this access
      (if plist
          ;; We did, return the token object
          (progn
-           (oauth2--do-trivia "Found matching plstore-id from plstore.")
+           (oauth2--do-trivia "[%s]: found matching plstore-id from plstore."
+                              func-name)
            (make-oauth2-token :plstore-id plstore-id
                               :client-id client-id
                               :client-secret client-secret
@@ -332,7 +336,7 @@ Returns an `oauth2-token'."
                               :token-url token-url
                               :access-response (plist-get plist
                                                           :access-response)))
-       (oauth2--do-trivia "Requesting new oauth2-token.")
+       (oauth2--do-trivia "[%s]: requesting new oauth2-token." func-name)
        (let ((token (oauth2-auth auth-url token-url
                                  client-id client-secret scope state
                                  redirect-uri)))
