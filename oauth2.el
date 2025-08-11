@@ -67,6 +67,8 @@
 (defvar oauth2--url-advice nil)
 (defvar oauth2--token-data)
 
+(defvar oauth2--default-redirect-uri "urn:ietf:wg:oauth:2.0:oob")
+
 (defun oauth2--do-warn (&rest msg)
   "Actual function to log MSG based on how `oauth2-debug' is set."
   (setcar msg (concat "[oauth2] " (car msg)))
@@ -110,6 +112,41 @@
                      ,(oauth2-token-access-response token)))
   (plstore-save plstore))
 
+(defun oauth2--build-url-param-str (&rest data)
+  "Build URL data string with values in DATA.
+DATA should be a list of attribute name and value one by one, therefore
+the length should be a multply of 2 or it will assert fail.  Each value
+will be hexified to be URL-safe.  If a value is not a string or an empty
+string, this pair of key value will be skipped.
+
+Return a URL-safe string of parameter data."
+  (unless (= (mod (length data) 2) 0)
+    (error "Invalid parameters.  Must be attribute name value pairs.  Data: %s"
+           data))
+  (let (data-list)
+    (while data
+      (let ((key (pop data))
+            (value (pop data)))
+        (when (and (stringp value)
+                   (not (string-empty-p value)))
+          (add-to-list 'data-list
+                       (concat key "=" (url-hexify-string value))
+                       t))))
+    (url-encode-url (string-join data-list "&"))))
+
+(defun oauth2--build-url (address &rest data)
+  "Build a URL string with ADDRESS and DATA.
+DATA can be a string or an alist of attributes.  If it is a string, it
+will be encoded; if it is an alist it will be converted to a URL-safe
+string using oauth2--build-url-param-str.  It will then be combined with
+address to build the full URL."
+  (let ((data-str (progn
+                    (if (> (length data) 1)
+                        (apply 'oauth2--build-url-param-str
+                               data)
+                      (url-encode-url (car data))))))
+    (concat address "?" data-str)))
+
 (defun oauth2-request-authorization (auth-url client-id &optional scope state
                                               redirect-uri)
   "Request OAuth authorization at AUTH-URL by launching `browse-url'.
@@ -121,19 +158,15 @@ behalf.  STATE is a string that your application uses to maintain the
 state between the request and redirect response.
 
 Returns the code provided by the service."
-  (let ((url (concat auth-url
-                     (if (string-match-p "\?" auth-url) "&" "?")
-                     "client_id=" (url-hexify-string client-id)
-                     "&response_type=code"
-                     "&redirect_uri=" (url-hexify-string
-                                       (or redirect-uri
-                                           "urn:ietf:wg:oauth:2.0:oob"))
-                     (if scope (concat "&scope=" (url-hexify-string scope)) "")
-                     (if state (concat "&state=" (url-hexify-string state)) "")
-                     ;; The following two parameters are required for Gmail
-                     ;; OAuth2 to generate the refresh token
-                     "&access_type=offline"
-                     "&prompt=consent")))
+  (let* ((url (oauth2--build-url auth-url
+                                 "client_id" client-id
+                                 "response_type" "code"
+                                 "redirect_uri"
+                                 (or redirect-uri oauth2--default-redirect-uri)
+                                 "scope" scope
+                                 "state" state
+                                 "access_type" "offline"
+                                 "prompt" "consent")))
     (browse-url url)
     (read-string (concat "Follow the instruction on your default browser, or "
                          "visit:\n" url
@@ -184,18 +217,16 @@ usually \"urn:ietf:wg:oauth:2.0:oob\".
 
 Returns an `oauth2-token'."
   (when code
-    (let ((request-timestamp (oauth2--current-timestamp))
-          (result
-           (oauth2-make-access-request
-            token-url
-            (url-encode-url
-             (concat
-              "client_id=" client-id
-              (when client-secret
-                (concat  "&client_secret=" client-secret))
-              "&code=" code
-              "&redirect_uri=" (or redirect-uri "urn:ietf:wg:oauth:2.0:oob")
-              "&grant_type=authorization_code")))))
+    (let* ((request-timestamp (oauth2--current-timestamp))
+           (access-response (oauth2-make-access-request
+                             token-url
+                             (oauth2--build-url-param-str
+                              "client_id" client-id
+                              "client_secret" client-secret
+                              "code" code
+                              "redirect_uri" (or redirect-uri
+                                                 oauth2--default-redirect-uri)
+                              "grant_type" "authorization_code"))))
       (make-oauth2-token :client-id client-id
                          :client-secret client-secret
                          :access-token (cdr (assoc 'access_token result))
@@ -227,18 +258,20 @@ TOKEN should be obtained with `oauth2-request-access'."
       (oauth2--do-debug "%s: reusing cached access-token." func-name)
 
     (oauth2--do-debug "%s: requesting new access-token." func-name)
-    (setf (oauth2-token-request-timestamp token) current-timestamp)
-    (setf (oauth2-token-access-token token)
-          (cdr (assoc 'access_token
-                      (oauth2-make-access-request
-                       (oauth2-token-token-url token)
-                       (concat "client_id=" (oauth2-token-client-id token)
-                               (when (oauth2-token-client-secret token)
-                                 (concat "&client_secret="
-                                         (oauth2-token-client-secret token)))
-                               "&refresh_token="
-                               (oauth2-token-refresh-token token)
-                               "&grant_type=refresh_token")))))
+    (let* ((client-id (oauth2-token-client-id token))
+           (client-secret (oauth2-token-client-secret token))
+           (refresh-token (oauth2-token-refresh-token token))
+           (token-url (oauth2-token-token-url token))
+           (url-param-str (oauth2--build-url-param-str
+                           "client_id" client-id
+                           "client_secret" client-secret
+                           "refresh_token" refresh-token
+                           "grant_type" "refresh_token"))
+           (access-token (cdr (assoc 'access_token
+                                     (oauth2-make-access-request
+                                      token-url url-param-str)))))
+      (setf (oauth2-token-request-timestamp token) current-timestamp)
+      (setf (oauth2-token-access-token token) access-token))
     (oauth2--with-plstore
      (oauth2--update-plstore plstore token)))
 
