@@ -99,15 +99,45 @@
   "Get the current timestamp in seconds."
   (time-convert nil 'integer))
 
+(defun oauth2--update-request-cache (host-name access-token request-timestamp
+                                               &optional request-cache)
+  "Update REQUEST-CACHE with HOST-NAME and ACCESS-TOKEN.
+The REQUEST-CACHE has the following structure:
+
+((host-name-1 (:access-token access-token-1
+               :request-timestamp request-timestamp-1))
+ (host-name-2 (:access-token access-token-2
+               :request-timestamp request-timestamp-2))
+ ...)
+
+The `expires-in' value is not stored here because experience says most
+providers use the same expires-in value regardless of which host is
+being requested.
+
+Update REQUEST-CACHE with the given HOST-NAME, the new ACCESS-TOKEN, and
+REQUEST-TIMESTAMP.  If REQUEST-CACHE is nil, create a new one.  If
+HOST-NAME is nil, do nothing.
+
+Returns the newly updated request-cache."
+  (when host-name
+    (let ((host-name (intern host-name)))
+      (org-plist-delete request-cache host-name)
+      (setq request-cache
+          (plist-put request-cache host-name
+                     `( :access-token ,access-token
+                        :request-timestamp ,request-timestamp)))))
+  request-cache)
+
+(defun oauth2--get-from-request-cache (request-cache host-name slot)
+  "Retrieve SLOT info from REQUEST-CACHE of HOST-NAME.
+Returns nil if the slot is unavailable."
+  (plist-get (plist-get request-cache (intern host-name) 'string=) slot))
+
 (defun oauth2--update-plstore (plstore token)
   "Update the file storage with handle PLSTORE with the value in TOKEN."
   (plstore-put plstore (oauth2-token-plstore-id token)
-               nil `(:access-token
-                     ,(oauth2-token-access-token token)
-                     :refresh-token
-                     ,(oauth2-token-refresh-token token)
-                     :request-timestamp
-                     ,(oauth2-token-request-timestamp token)
+               nil `(:request-cache
+                     ,(oauth2-token-request-cache token)
                      :access-response
                      ,(oauth2-token-access-response token)))
   (plstore-save plstore))
@@ -206,19 +236,23 @@ Returns the code provided by the service."
   client-secret
   access-token
   refresh-token
-  request-timestamp
+  request-cache
   auth-url
   token-url
   access-response)
 
 (defun oauth2-request-access (auth-url token-url client-id client-secret code
-                                       &optional redirect-uri)
+                                       &optional redirect-uri host-name)
   "Request OAuth access.
 TOKEN-URL is the URL for making the request.  CLIENT-ID and
 CLIENT-SECRET are provided by the service provider.  The CODE should be
 obtained with `oauth2-request-authorization'.  REDIRECT-URI is used when
 requesting access-token.  The default value for desktop application is
-usually \"urn:ietf:wg:oauth:2.0:oob\".
+usually \"urn:ietf:wg:oauth:2.0:oob\".  HOST-NAME is the server to
+request access, e.g. IMAP or SMTP server address.  Its value should
+match the one when calling `oauth2-auth-and-store'.  Leaving HOST-NAME
+as nil effectively disables caching and will request a new token on each
+request.
 
 Returns an `oauth2-token'."
   (when code
@@ -231,23 +265,32 @@ Returns an `oauth2-token'."
                               "code" code
                               "redirect_uri" (or redirect-uri
                                                  oauth2--default-redirect-uri)
-                              "grant_type" "authorization_code"))))
+                              "grant_type" "authorization_code")))
+           (access-token (cdr (assoc 'access_token access-response)))
+           (refresh-token (cdr (assoc 'refresh_token access-response)))
+           (request-cache (oauth2--update-request-cache host-name
+                                                        access-token
+                                                        request-timestamp)))
       (make-oauth2-token :client-id client-id
                          :client-secret client-secret
-                         :access-token (cdr (assoc 'access_token result))
-                         :refresh-token (cdr (assoc 'refresh_token result))
-                         :request-timestamp request-timestamp
+                         :access-token access-token
+                         :refresh-token refresh-token
+                         :request-cache request-cache
                          :auth-url auth-url
                          :token-url token-url
-                         :access-response result))))
+                         :access-response access-response))))
 
 ;;;###autoload
-(defun oauth2-refresh-access (token)
+(defun oauth2-refresh-access (token &optional host-name)
   "Refresh OAuth access TOKEN.
 TOKEN should be obtained with `oauth2-request-access'."
   (if-let* ((func-name "oauth2-refresh-access")
             (current-timestamp (oauth2--current-timestamp))
-            (request-timestamp (oauth2-token-request-timestamp token))
+            (request-cache (oauth2-token-request-cache token))
+            (request-timestamp (or (oauth2--get-from-request-cache
+                                    request-cache host-name :request-timestamp)
+                                   ;; host-name could be nil, so default to 0
+                                   0))
             (timestamp-difference (- current-timestamp request-timestamp))
             (expires-in (cdr (assoc 'expires_in
                                     (oauth2-token-access-response token))))
@@ -274,9 +317,12 @@ TOKEN should be obtained with `oauth2-request-access'."
                            "grant_type" "refresh_token"))
            (access-token (cdr (assoc 'access_token
                                      (oauth2-make-access-request
-                                      token-url url-param-str)))))
-      (setf (oauth2-token-request-timestamp token) current-timestamp)
-      (setf (oauth2-token-access-token token) access-token))
+                                      token-url url-param-str))))
+           (request-cache (oauth2-token-request-cache token)))
+      (setf (oauth2-token-access-token token) access-token)
+      (setf (oauth2-token-request-cache token)
+            (oauth2--update-request-cache host-name access-token
+                                          current-timestamp request-cache)))
     (oauth2--with-plstore
      (oauth2--update-plstore plstore token)))
 
@@ -284,7 +330,8 @@ TOKEN should be obtained with `oauth2-request-access'."
 
 ;;;###autoload
 (defun oauth2-auth (auth-url token-url client-id client-secret
-                             &optional scope state redirect-uri user-name)
+                             &optional scope state redirect-uri user-name
+                             host-name)
   "Authenticate application via OAuth2."
   (oauth2-request-access
    auth-url
@@ -293,7 +340,8 @@ TOKEN should be obtained with `oauth2-request-access'."
    client-secret
    (oauth2-request-authorization auth-url client-id scope state redirect-uri
                                  user-name)
-   redirect-uri))
+   redirect-uri
+   host-name))
 
 (defun oauth2-compute-id (auth-url token-url scope client-id user-name)
   "Compute an unique id mainly to use as plstore id.
@@ -303,7 +351,8 @@ USER-NAME to ensure the plstore id is unique."
 
 ;;;###autoload
 (defun oauth2-auth-and-store (auth-url token-url scope client-id client-secret
-                                       &optional redirect-uri state user-name)
+                                       &optional redirect-uri state user-name
+                                       host-name)
   "Request access to a resource and store it.
 AUTH-URL and TOKEN-URL are provided by the service provider.  CLIENT-ID
 and CLIENT-SECRET should be generated by the service provider when a
@@ -312,6 +361,9 @@ application can access on the user's behalf.  STATE is a string that
 your application uses to maintain the state between the request and
 redirect response. USER-NAME is the login user name and is required to
 provide a unique plstore id for users on the same service provider.
+HOST-NAME is the server to request authentication, e.g. IMAP or SMTP
+server address.  Leaving HOST-NAME as nil effectively disables caching
+and will request a new token on each refresh.
 
 Returns an `oauth2-token'."
   ;; We store a MD5 sum of all URL
@@ -322,27 +374,33 @@ Returns an `oauth2-token'."
           (plist (cdr (plstore-get plstore plstore-id))))
      (oauth2--do-trivia "[%s]: user-name: %s\nplstore-id: %s"
                         func-name user-name plstore-id)
-     ;; Check if we found something matching this access
-     (if plist
-         ;; We did, return the token object
+     ;; Check if we found something matching this access and have a valid cache.
+     (if-let* ((plist plist)
+               (access-response (plist-get plist :access-response))
+               (refresh-token (cdr (assoc 'refresh_token access-response)))
+               (request-cache (plist-get plist :request-cache))
+               (access-token (or (oauth2--get-from-request-cache
+                                  request-cache host-name :access-token)
+                                 "")))
          (progn
            (oauth2--do-trivia "[%s]: found matching plstore-id from plstore."
                               func-name)
            (make-oauth2-token :plstore-id plstore-id
                               :client-id client-id
                               :client-secret client-secret
-                              :access-token (plist-get plist :access-token)
-                              :refresh-token (plist-get plist :refresh-token)
-                              :request-timestamp (plist-get plist
-                                                            :request-timestamp)
+                              :access-token access-token
+                              :refresh-token refresh-token
+                              :request-cache request-cache
                               :auth-url auth-url
                               :token-url token-url
-                              :access-response (plist-get plist
-                                                          :access-response)))
-       (oauth2--do-trivia "[%s]: requesting new oauth2-token." func-name)
+                              :access-response access-response))
+       (oauth2--do-trivia
+        (concat "[%s]: no matching plstore-id found or cache invalid.  "
+                "Requesting new oauth2-token.")
+        func-name)
        (let ((token (oauth2-auth auth-url token-url
                                  client-id client-secret scope state
-                                 redirect-uri user-name)))
+                                 redirect-uri user-name host-name)))
          ;; Set the plstore
          (setf (oauth2-token-plstore-id token) plstore-id)
          (oauth2--update-plstore plstore token)
