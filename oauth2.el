@@ -148,14 +148,16 @@ address to build the full URL."
     (concat address "?" data-str)))
 
 (defun oauth2-request-authorization (auth-url client-id &optional scope state
-                                              redirect-uri)
+                                              redirect-uri user-name)
   "Request OAuth authorization at AUTH-URL by launching `browse-url'.
 CLIENT-ID is the client id provided by the provider which uses
 REDIRECT-URI when requesting an access-token.  The default redirect_uri
 for desktop application is usually \"urn:ietf:wg:oauth:2.0:oob\".  SCOPE
 identifies the resources that your application can access on the user's
 behalf.  STATE is a string that your application uses to maintain the
-state between the request and redirect response.
+state between the request and redirect response. USER-NAME is used to
+provide the login_hint which will fill the login user name on the
+requesting webpage to save users some typing.
 
 Returns the code provided by the service."
   (let* ((func-name "oauth2-request-authorization")
@@ -166,6 +168,7 @@ Returns the code provided by the service."
                                  (or redirect-uri oauth2--default-redirect-uri)
                                  "scope" scope
                                  "state" state
+                                 "login_hint" user-name
                                  "access_type" "offline"
                                  "prompt" "consent")))
     (oauth2--do-trivia "[%s]: url: %s" func-name url)
@@ -281,15 +284,15 @@ TOKEN should be obtained with `oauth2-request-access'."
 
 ;;;###autoload
 (defun oauth2-auth (auth-url token-url client-id client-secret
-                             &optional scope state redirect-uri)
+                             &optional scope state redirect-uri user-name)
   "Authenticate application via OAuth2."
   (oauth2-request-access
    auth-url
    token-url
    client-id
    client-secret
-   (oauth2-request-authorization
-    auth-url client-id scope state redirect-uri)
+   (oauth2-request-authorization auth-url client-id scope state redirect-uri
+                                 user-name)
    redirect-uri))
 
 (defun oauth2-compute-id (auth-url token-url scope client-id user-name)
@@ -339,7 +342,7 @@ Returns an `oauth2-token'."
        (oauth2--do-trivia "[%s]: requesting new oauth2-token." func-name)
        (let ((token (oauth2-auth auth-url token-url
                                  client-id client-secret scope state
-                                 redirect-uri)))
+                                 redirect-uri user-name)))
          ;; Set the plstore
          (setf (oauth2-token-plstore-id token) plstore-id)
          (oauth2--update-plstore plstore token)
