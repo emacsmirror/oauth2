@@ -3,7 +3,7 @@
 ;; Copyright (C) 2011-2021 Free Software Foundation, Inc
 
 ;; Author: Julien Danjou <julien@danjou.info>
-;; Maintainer: emacs-devel@gnu.org
+;; Maintainer: Xiyue Deng <manphiz@gmail.com>, emacs-devel@gnu.org
 ;; Version: 0.17
 ;; URL: https://elpa.gnu.org/packages/oauth2.html
 ;; Keywords: comm
