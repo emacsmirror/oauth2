@@ -1,0 +1,24 @@
+.test:
+  stage: test
+  script:
+    - emacs -Q --batch -L tests -l oauth2.el -l oauth2-tests.el -f ert-run-tests-batch-and-exit
+
+test-27.2:
+  image: "silex/emacs:27.1-ci"
+  extends: .test
+
+test-28.2:
+  image: "silex/emacs:27.1-ci"
+  extends: .test
+
+test-29.4:
+  image: "silex/emacs:27.1-ci"
+  extends: .test
+
+test-30.2:
+  image: "silex/emacs:27.1-ci"
+  extends: .test
+
+test-master:
+  image: "silex/emacs:master-ci"
+  extends: .test
