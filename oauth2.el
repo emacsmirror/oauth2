@@ -132,7 +132,7 @@ Returns the newly updated request-cache."
 (defun oauth2--get-from-request-cache (request-cache host-name slot)
   "Retrieve SLOT info from REQUEST-CACHE of HOST-NAME.
 Returns nil if the slot is unavailable."
-  (plist-get (plist-get request-cache (intern host-name) 'string=) slot))
+  (plist-get (plist-get request-cache (intern host-name)) slot))
 
 (defun oauth2--update-plstore (plstore token)
   "Update the file storage with handle PLSTORE with the value in TOKEN."
