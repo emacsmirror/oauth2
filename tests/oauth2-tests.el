@@ -1,3 +1,5 @@
+;;; oauth2-tests.el --- oauth2.el tests -*- lexical-binding: t -*-
+
 (require 'oauth2)
 (require 'ert)
 
@@ -50,3 +52,5 @@
              (expected-challenge (plist-get test-case :challenge)))
         (should (string= challenge expected-challenge))
         (should (= (length challenge) expected-challenge-length))))))
+
+;;; oauth2-tests.el ends here.
