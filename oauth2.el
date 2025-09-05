@@ -39,6 +39,7 @@
 ;;; Code:
 
 (eval-when-compile (require 'cl-lib))
+(require 'org-macs)
 (require 'plstore)
 (require 'json)
 (require 'url-http)
@@ -161,9 +162,8 @@ Return a URL-safe string of parameter data."
             (value (pop data)))
         (when (and (stringp value)
                    (not (string-empty-p value)))
-          (add-to-list 'data-list
-                       (concat key "=" (url-hexify-string value))
-                       t))))
+          (push (concat key "=" (url-hexify-string value)) data-list))))
+    (setq data-list (reverse data-list))
     (url-encode-url (string-join data-list "&"))))
 
 (defun oauth2--build-url (address &rest data)
@@ -172,11 +172,10 @@ DATA can be a string or an alist of attributes.  If it is a string, it
 will be encoded; if it is an alist it will be converted to a URL-safe
 string using oauth2--build-url-param-str.  It will then be combined with
 address to build the full URL."
-  (let ((data-str (progn
-                    (if (> (length data) 1)
-                        (apply 'oauth2--build-url-param-str
-                               data)
-                      (url-encode-url (car data))))))
+  (let ((data-str (if (> (length data) 1)
+                      (apply #'oauth2--build-url-param-str
+                             data)
+                    (url-encode-url (car data)))))
     (concat address "?" data-str)))
 
 (defun oauth2--generate-code-verifier (&optional verifier-length)
@@ -184,8 +183,7 @@ address to build the full URL."
 The string should be of length 43 to 128 (inclusive).  If
 VERIFIER-LENGTH is nil, we default to 90 as mutt_oauth2.py did.  See
 RFC7636 for more details."
-  (let* ((func-name "oauth2--generate-code-verifier")
-         (valid-chars
+  (let* ((valid-chars
           "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_")
          (verifier-length (or verifier-length 90))
          result-list)
@@ -236,7 +234,7 @@ Returns the code provided by the service."
                                           code-verifier)))
                   (setq param (plist-put param
                                          "code_challenge_method" "S256")))
-                (add-to-list 'param auth-url)
+                (push auth-url param)
                 (apply 'oauth2--build-url param))))
     (oauth2--do-trivia "[%s]: url: %s" func-name url)
     (browse-url url)
