@@ -39,7 +39,6 @@
 ;;; Code:
 
 (eval-when-compile (require 'cl-lib))
-(require 'org-macs)
 (require 'plstore)
 (require 'json)
 (require 'url-http)
@@ -122,7 +121,6 @@ HOST-NAME is nil, do nothing.
 Returns the newly updated request-cache."
   (when host-name
     (let ((host-name (intern host-name)))
-      (org-plist-delete request-cache host-name)
       (setq request-cache
           (plist-put request-cache host-name
                      `( :access-token ,access-token
