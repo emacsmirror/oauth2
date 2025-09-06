@@ -1,12 +1,15 @@
 .build:
   stage: build
   script:
-    - emacs -Q --batch -L tests -l oauth2.el --eval '(byte-recompile-directory "." 0)'
+    - curl -fsSL https://raw.github.com/emacs-eldev/eldev/master/bin/eldev > eldev && chmod a+x eldev
+    - ./eldev compile
+    - ./eldev lint
 
 .test:
   stage: test
   script:
-    - emacs -Q --batch -L tests -l oauth2.el -l oauth2-tests.el -f ert-run-tests-batch-and-exit
+    - curl -fsSL https://raw.github.com/emacs-eldev/eldev/master/bin/eldev > eldev && chmod a+x eldev
+    - ./eldev test
 
 
 build-27.2:
