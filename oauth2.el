@@ -326,6 +326,8 @@ optional but highly recommended which is required for the cache to work."
   (if-let* ((func-name "oauth2-refresh-access")
             (current-timestamp (oauth2--current-timestamp))
             (request-cache (oauth2-token-request-cache token))
+            (access-token (oauth2--get-from-request-cache
+                           request-cache host-name :access-token))
             (request-timestamp (or (oauth2--get-from-request-cache
                                     request-cache host-name :request-timestamp)
                                    ;; host-name could be nil, so default to 0
